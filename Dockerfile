@@ -26,7 +26,13 @@ RUN apt-get update \
 
 WORKDIR /opt/app
 
-RUN git clone --branch "${APP_GIT_REF}" --depth 1 "${APP_REPO_URL}" .
+# Not a shallow `--branch` clone: the build-and-publish.yml workflow
+# passes a full commit SHA (not a branch/tag name) for reproducibility,
+# and `git clone --branch` only accepts refs that exist by that name on
+# the remote -- it rejects arbitrary SHAs with exit code 128. A full
+# clone + checkout works for a branch, a tag, or a raw SHA alike.
+RUN git clone "${APP_REPO_URL}" . \
+    && git checkout "${APP_GIT_REF}"
 
 # The `app` extra in pyproject.toml pulls in streamlit; every other
 # dependency (lxml, pydantic, pandas, pyld, jsonschema, qrcode, ...) is
