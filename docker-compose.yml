@@ -1,5 +1,12 @@
 services:
   app:
+    # Pulled by default: the build-and-publish.yml workflow builds and
+    # pushes this multi-arch image automatically whenever the app repo's
+    # main branch moves. `docker compose pull && up -d` is the normal
+    # update path -- no local build needed. The `build:` block below is
+    # still used by `docker compose build` for a custom APP_GIT_REF the
+    # published image doesn't have yet.
+    image: ghcr.io/ivoed22/gdsn-to-gs1-jsonldonline:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile

@@ -88,27 +88,64 @@ nano .env   # paste your CLOUDFLARE_TUNNEL_TOKEN from Step 1
 
 ## Step 5 — Start it
 
+A [GitHub Action](.github/workflows/build-and-publish.yml) in this repo
+already builds and publishes a ready-to-run multi-arch image to GHCR
+every time the app repo's `main` branch moves (checked every 6 hours,
+or on demand — see below), so the normal path is a pull, not a build:
+
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs -f    # watch both containers come up; Ctrl+C to stop watching (they keep running)
 ```
 
 `app` needs to report healthy before `cloudflared` starts (see the
-healthcheck in `docker-compose.yml`) — the first build can take a few
-minutes (installing `pandas`/`lxml` etc. from source on ARM if no
-prebuilt wheel is available for that platform/Python version).
+healthcheck in `docker-compose.yml`).
+
+**First time only, or if the pull fails with "denied"**: the GHCR
+package may still be private by default even though this repo is
+public. Go to your GitHub profile → **Packages** →
+`gdsn-to-gs1-jsonldonline` → **Package settings** → **Change
+visibility** → **Public**. (One-time fix; only needed once the first
+image has been published.)
+
+If you'd rather build locally instead of pulling (e.g. to test an
+`APP_GIT_REF` the workflow hasn't published yet):
+
+```bash
+docker compose build --pull
+docker compose up -d
+```
 
 ## Step 6 — Verify
 
 Visit `https://dpp.yourdomain.com` (whatever hostname you chose in
 Step 1). You should see the workbench landing page.
 
-## Updating to a newer version of the app
+## Keeping it up to date
+
+The image is rebuilt and republished automatically whenever the app
+repo's `main` branch moves (checked every 6 hours by
+[`build-and-publish.yml`](.github/workflows/build-and-publish.yml); you
+can also trigger it immediately from this repo's **Actions** tab →
+*Build and publish image* → **Run workflow**). On the host, pick up a
+newer published image with:
 
 ```bash
 cd gdsn-to-gs1-jsonldOnline
-git pull                                   # picks up any changes to this deploy repo itself
-docker compose build --pull --build-arg APP_GIT_REF=main   # or a specific tag/commit
+docker compose pull
+docker compose up -d
+```
+
+To pin to a specific commit instead of always tracking `latest`, set
+`IMAGE_TAG=<commit-sha>` in `.env` (the workflow tags every build with
+both `latest` and the exact app commit SHA it built).
+
+To build locally from a specific ref instead of using a published
+image at all:
+
+```bash
+docker compose build --pull --build-arg APP_GIT_REF=<tag-or-commit>
 docker compose up -d
 ```
 
@@ -134,8 +171,12 @@ docker compose up -d
 
 ## Not included (yet)
 
-- Automated CI/CD (e.g. auto-rebuild on every push to the app repo's
-  `main`). For now, updates are a manual `docker compose build --pull`
-  — intentional, to keep this first version simple and predictable.
+- Auto-deploy on the host itself (pulling and restarting automatically
+  when a new image is published). Today that last step —
+  `docker compose pull && docker compose up -d` on the VM — is still
+  manual; a natural follow-up is a cron job or a small webhook receiver
+  on the host that runs it automatically.
 - Any modification to the app itself — that always happens in
   [`ivoed22/gdsn-to-gs1-jsonld`](https://github.com/ivoed22/gdsn-to-gs1-jsonld).
+  This repo's build workflow only *reads* that repo's public `main`
+  branch (`git ls-remote`); it never writes to it.
